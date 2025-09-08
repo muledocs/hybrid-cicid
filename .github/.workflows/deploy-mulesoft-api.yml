@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Codee
       uses: actions/checkout@v3
 
     - name: Install Dependencies
