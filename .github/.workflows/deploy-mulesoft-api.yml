@@ -1,4 +1,4 @@
-name: Deploy MuleSoft API
+name: Deploy MuleSoft APIs
 
 on:
   push:
