@@ -44,6 +44,6 @@ jobs:
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-          --form "file=@test.jar" \
+          --form "file=@test2.jar" \
           --form "artifactName=$ARTIFACT_NAME" \
           --form "targetId=$TARGET_ID"
