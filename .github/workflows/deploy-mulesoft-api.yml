@@ -45,29 +45,25 @@ jobs:
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID")
         echo "Response: $response"
-        # Fix: Use .data[] to search for the application inside the response
         echo $response | jq -e ".data[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null && echo "exists=true" >> $GITHUB_ENV || echo "exists=false" >> $GITHUB_ENV
 
-    - name: Debug API Existence
-      run: |
-        echo "Does the API exist? $exists"
-
-    - name: Redeploy MuleSoft API (if exists)
+    - name: Stop Existing API (if exists)
       if: env.exists == 'true'
       run: |
-        echo "API exists. Redeploying..."
-        curl --request PUT "$ANYPOINT_BASE_URL/hybrid/api/v1/applications/$ARTIFACT_NAME" \
+        echo "Stopping existing API..."
+        appId=$(curl --silent --request GET "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-          --form "file=@test.jar" \
-          --form "artifactName=$ARTIFACT_NAME" \
-          --form "targetId=$TARGET_ID"
+          --header "X-ANYPNT-ENV-ID: $ENV_ID" | jq -r ".data[] | select(.name == \"$ARTIFACT_NAME\") | .id")
+        curl --request POST "$ANYPOINT_BASE_URL/hybrid/api/v1/applications/$appId/stop" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID"
+        echo "Stopped application with ID: $appId"
 
-    - name: Deploy MuleSoft API (if not exists)
-      if: env.exists == 'false'
+    - name: Deploy MuleSoft API
       run: |
-        echo "API does not exist. Deploying..."
+        echo "Deploying MuleSoft API..."
         curl --request POST "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
