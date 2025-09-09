@@ -25,6 +25,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y curl jq
+
     - name: Generate Access Token
       id: generate-token
       run: |
@@ -35,13 +36,74 @@ jobs:
           --data-urlencode "client_secret=B51af0A705864943B92692AFbB1CC2db" \
           --data-urlencode "grant_type=client_credentials")
         echo "TOKEN=$(echo $response | jq -r '.access_token')" >> $GITHUB_ENV
-    - name: Deploy MuleSoft API
+
+    - name: Check if Application Exists
+      id: check-app
       run: |
-        echo "Deploying MuleSoft API..."
-        curl --request POST "$ANYPOINT_BASE_URL" \
+        echo "Checking if application already exists..."
+        response=$(curl --request GET "$ANYPOINT_BASE_URL" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID")
+        
+        echo "API Response: $response"
+        
+        app_id=$(echo $response | jq -r ".data[]? | select(.artifactName==\"$ARTIFACT_NAME\") | .id")
+        
+        if [ -n "$app_id" ] && [ "$app_id" != "null" ]; then
+          echo "Application exists with ID: $app_id"
+          echo "APP_EXISTS=true" >> $GITHUB_ENV
+          echo "APP_ID=$app_id" >> $GITHUB_ENV
+        else
+          echo "Application does not exist. Will create new deployment."
+          echo "APP_EXISTS=false" >> $GITHUB_ENV
+        fi
+
+    - name: Redeploy Existing Application
+      if: env.APP_EXISTS == 'true'
+      run: |
+        echo "Redeploying existing application with ID: $APP_ID..."
+        response=$(curl --request PUT "$ANYPOINT_BASE_URL/$APP_ID" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
           --form "file=@test2.jar" \
           --form "artifactName=$ARTIFACT_NAME" \
-          --form "targetId=$TARGET_ID"
+          --form "targetId=$TARGET_ID")
+        
+        echo "Redeployment response: $response"
+        echo "✅ Application successfully redeployed!"
+
+    - name: Deploy New Application
+      if: env.APP_EXISTS == 'false'
+      run: |
+        echo "Deploying new MuleSoft application..."
+        response=$(curl --request POST "$ANYPOINT_BASE_URL" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
+          --form "file=@test2.jar" \
+          --form "artifactName=$ARTIFACT_NAME" \
+          --form "targetId=$TARGET_ID")
+        
+        echo "Deployment response: $response"
+        echo "✅ New application successfully deployed!"
+
+    - name: Verify Deployment Status
+      run: |
+        echo "Verifying deployment status..."
+        sleep 10 # Wait for deployment to initialize
+        
+        response=$(curl --request GET "$ANYPOINT_BASE_URL" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID")
+        
+        app_status=$(echo $response | jq -r ".data[]? | select(.artifactName==\"$ARTIFACT_NAME\") | .status")
+        
+        if [ "$app_status" = "STARTED" ]; then
+          echo "✅ Application is running successfully!"
+        else
+          echo "⚠️ Application status: $app_status"
+          echo "Please check the Runtime Manager for more details."
+        fi
