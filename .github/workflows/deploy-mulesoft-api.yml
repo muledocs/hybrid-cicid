@@ -40,7 +40,7 @@ jobs:
       id: check-api
       run: |
         echo "Checking if the API exists..."
-        response=$(curl --request GET "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
+        response=$(curl --silent --request GET "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID")
