@@ -29,7 +29,7 @@ jobs:
       id: generate-token
       run: |
         echo "Generating Access Token using Connected App credentials..."
-        response=$(curl --request POST "$ANYPOINT_BASE_URL/accounts/api/v2/oauth2/token" \
+        response=$(curl --silent --request POST "$ANYPOINT_BASE_URL/accounts/api/v2/oauth2/token" \
           --header "Content-Type: application/x-www-form-urlencoded" \
           --data-urlencode "client_id=06c4c45cf75341509e5b9fb5497b7c2b" \
           --data-urlencode "client_secret=B51af0A705864943B92692AFbB1CC2db" \
@@ -45,7 +45,12 @@ jobs:
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID")
         echo "Response: $response"
-        echo $response | jq -e ".[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null && echo "exists=true" >> $GITHUB_ENV || echo "exists=false" >> $GITHUB_ENV
+        # Fix: Use .data[] to search for the application inside the response
+        echo $response | jq -e ".data[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null && echo "exists=true" >> $GITHUB_ENV || echo "exists=false" >> $GITHUB_ENV
+
+    - name: Debug API Existence
+      run: |
+        echo "Does the API exist? $exists"
 
     - name: Redeploy MuleSoft API (if exists)
       if: env.exists == 'true'
