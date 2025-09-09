@@ -35,7 +35,7 @@ jobs:
     - name: Deploy or Redeploy MuleSoft API
       run: |
         echo "Deploying MuleSoft API..."
-        curl --request PUT "$ANYPOINT_BASE_URL/hybred/api/v1/applications/$ARTIFACT_NAME" \
+        curl --request PUT "https://anypoint.mulesoft.com/hybrid/api/v1/applications/$ARTIFACT_NAME" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
