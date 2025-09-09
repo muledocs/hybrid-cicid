@@ -36,9 +36,33 @@ jobs:
           --data-urlencode "grant_type=client_credentials")
         echo "TOKEN=$(echo $response | jq -r '.access_token')" >> $GITHUB_ENV
 
-    - name: Deploy MuleSoft API
+    - name: Check if API Exists
+      id: check-api
       run: |
-        echo "Deploying MuleSoft API..."
+        echo "Checking if the API exists..."
+        response=$(curl --request GET "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID")
+        echo "Response: $response"
+        echo $response | jq -e ".[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null && echo "exists=true" >> $GITHUB_ENV || echo "exists=false" >> $GITHUB_ENV
+
+    - name: Redeploy MuleSoft API (if exists)
+      if: env.exists == 'true'
+      run: |
+        echo "API exists. Redeploying..."
+        curl --request PUT "$ANYPOINT_BASE_URL/hybrid/api/v1/applications/$ARTIFACT_NAME" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
+          --form "file=@test.jar" \
+          --form "artifactName=$ARTIFACT_NAME" \
+          --form "targetId=$TARGET_ID"
+
+    - name: Deploy MuleSoft API (if not exists)
+      if: env.exists == 'false'
+      run: |
+        echo "API does not exist. Deploying..."
         curl --request POST "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
