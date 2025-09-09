@@ -1,13 +1,13 @@
 name: Deploy MuleSoft APIs
 
 on:
-  workflow_dispatch: # Allow manual triggering of the workflow
+  workflow_dispatch: # Allows manual triggering of the workflow
   push:
     branches:
       - main
 
 env:
-  ANYPOINT_BASE_URL: "https://anypoint.mulesoft.com" # Base URL for Anypoint Platform
+  ANYPOINT_BASE_URL: "https://anypoint.mulesoft.com/hybrid/api/v1/applications" # Base URL for Anypoint Platform
   ORG_ID: "f75678aa-ba06-4a02-a863-17caa791761e" # Replace with your Organization ID
   ENV_ID: "b126ed92-9bed-4496-8e31-160e24e375be" # Replace with your Environment ID
   TARGET_ID: "51295947" # Replace with your Target ID
@@ -30,18 +30,17 @@ jobs:
       id: generate-token
       run: |
         echo "Generating Access Token using Connected App credentials..."
-        response=$(curl --request POST "$ANYPOINT_BASE_URL/accounts/api/v2/oauth2/token" \
+        response=$(curl --request POST "https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token" \
           --header "Content-Type: application/x-www-form-urlencoded" \
-          --data-urlencode "client_id=${{ secrets.CLIENT_ID }}" \
-          --data-urlencode "client_secret=${{ secrets.CLIENT_SECRET }}" \
+          --data-urlencode "client_id=06c4c45cf75341509e5b9fb5497b7c2b" \
+          --data-urlencode "client_secret=B51af0A705864943B92692AFbB1CC2db" \
           --data-urlencode "grant_type=client_credentials")
-        echo "Response: $response" # Optional for debugging purposes; remove in production
         echo "TOKEN=$(echo $response | jq -r '.access_token')" >> $GITHUB_ENV
 
     - name: Deploy MuleSoft API
       run: |
         echo "Deploying MuleSoft API..."
-        curl --request POST "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
+        curl --request POST "$ANYPOINT_BASE_URL" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
