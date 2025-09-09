@@ -32,10 +32,10 @@ jobs:
           --data-urlencode "grant_type=client_credentials")
         echo "TOKEN=$(echo $response | jq -r '.access_token')" >> $GITHUB_ENV
 
-    - name: Deploy MuleSoft API
+    - name: Deploy or Redeploy MuleSoft API
       run: |
         echo "Deploying MuleSoft API..."
-        curl --request POST "$ANYPOINT_BASE_URL" \
+        curl --request PUT "$ANYPOINT_BASE_URL/hybred/api/v1/applications/$ARTIFACT_NAME" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
