@@ -47,19 +47,19 @@ jobs:
         echo "Response: $response"
         echo $response | jq -e ".data[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null && echo "exists=true" >> $GITHUB_ENV || echo "exists=false" >> $GITHUB_ENV
 
-    - name: Stop Existing API (if exists)
+    - name: Delete Existing API (if exists)
       if: env.exists == 'true'
       run: |
-        echo "Stopping existing API..."
+        echo "Deleting existing API..."
         appId=$(curl --silent --request GET "$ANYPOINT_BASE_URL/hybrid/api/v1/applications" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" | jq -r ".data[] | select(.name == \"$ARTIFACT_NAME\") | .id")
-        curl --request POST "$ANYPOINT_BASE_URL/hybrid/api/v1/applications/$appId/stop" \
+        curl --request DELETE "$ANYPOINT_BASE_URL/hybrid/api/v1/applications/$appId" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID"
-        echo "Stopped application with ID: $appId"
+        echo "Deleted application with ID: $appId"
 
     - name: Deploy MuleSoft API
       run: |
