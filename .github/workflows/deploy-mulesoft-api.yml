@@ -7,10 +7,10 @@ on:
 
 env:
   ANYPOINT_BASE_URL: "https://anypoint.mulesoft.com" # Base URL for Anypoint Platform
-  ORG_ID: "f75678aa-ba06-4a02-a863-17caa791761e" # Organization ID
-  ENV_ID: "b126ed92-9bed-4496-8e31-160e24e375be" # Environment ID
-  TARGET_ID: "51295947" # Target ID
-  ARTIFACT_NAME: "rafiq-hybrid-cicd" # Application/Artifact Name
+  ORG_ID: "f75678aa-ba06-4a02-a863-17caa791761e" # Replace with your Organization ID
+  ENV_ID: "b126ed92-9bed-4496-8e31-160e24e375be" # Replace with your Environment ID
+  TARGET_ID: "51295947" # Replace with your Target ID
+  ARTIFACT_NAME: "rafiq-hybrid-cicd" # Replace with your Artifact Name
 
 jobs:
   deploy:
