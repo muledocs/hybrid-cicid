@@ -7,10 +7,10 @@ on:
 
 env:
   ANYPOINT_BASE_URL: "https://anypoint.mulesoft.com" # Base URL for Anypoint Platform
-  ORG_ID: "f75678aa-ba06-4a02-a863-17caa791761e" # Replace with your Organization ID
-  ENV_ID: "b126ed92-9bed-4496-8e31-160e24e375be" # Replace with your Environment ID
-  TARGET_ID: "51295947" # Replace with your Target ID
-  ARTIFACT_NAME: "rafiq-hybrid-cicd" # Replace with your Artifact Name
+  ORG_ID: "f75678aa-ba06-4a02-a863-17caa791761e" # Organization ID
+  ENV_ID: "b126ed92-9bed-4496-8e31-160e24e375be" # Environment ID
+  TARGET_ID: "51295947" # Target ID
+  ARTIFACT_NAME: "rafiq-hybrid-cicd" # Application/Artifact Name
 
 jobs:
   deploy:
@@ -45,7 +45,11 @@ jobs:
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID")
         echo "Response: $response"
-        echo $response | jq -e ".data[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null && echo "exists=true" >> $GITHUB_ENV || echo "exists=false" >> $GITHUB_ENV
+        if echo "$response" | jq -e ".data[] | select(.name == \"$ARTIFACT_NAME\")" > /dev/null; then
+          echo "exists=true" >> $GITHUB_ENV
+        else
+          echo "exists=false" >> $GITHUB_ENV
+        fi
 
     - name: Delete Existing API (if exists)
       if: env.exists == 'true'
