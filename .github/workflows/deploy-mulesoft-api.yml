@@ -35,183 +35,43 @@ jobs:
           --data-urlencode "client_id=06c4c45cf75341509e5b9fb5497b7c2b" \
           --data-urlencode "client_secret=B51af0A705864943B92692AFbB1CC2db" \
           --data-urlencode "grant_type=client_credentials")
-        
-        token=$(echo $response | jq -r '.access_token')
-        if [ "$token" = "null" ] || [ -z "$token" ]; then
-          echo "❌ Failed to generate access token"
-          exit 1
-        fi
-        echo "TOKEN=$token" >> $GITHUB_ENV
-        echo "✅ Access token generated"
+        echo "TOKEN=$(echo $response | jq -r '.access_token')" >> $GITHUB_ENV
 
-    - name: Check for Existing Application
-      id: check-existing
+    - name: Check if API Exists
+      id: check-api
       run: |
-        echo "🔍 Checking for existing application: $ARTIFACT_NAME"
-        
-        response=$(curl -s --request GET "$ANYPOINT_BASE_URL" \
+        echo "Checking if API already exists..."
+        response=$(curl --request GET "$ANYPOINT_BASE_URL" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID")
-        
-        echo "Applications response: $response"
-        
-        # Extract application ID if exists
-        app_id=$(echo "$response" | jq -r ".data[]? | select(.artifactName==\"$ARTIFACT_NAME\") | .id")
-        app_status=$(echo "$response" | jq -r ".data[]? | select(.artifactName==\"$ARTIFACT_NAME\") | .status")
-        
-        if [ -n "$app_id" ] && [ "$app_id" != "null" ]; then
-          echo "📦 Found existing application:"
-          echo "   ID: $app_id"
-          echo "   Status: $app_status" 
-          echo "APP_ID=$app_id" >> $GITHUB_ENV
-          echo "APP_EXISTS=true" >> $GITHUB_ENV
-          echo "CURRENT_STATUS=$app_status" >> $GITHUB_ENV
+        echo "Response: $response"
+        exists=$(echo $response | jq -r --arg ARTIFACT_NAME "$ARTIFACT_NAME" '.[] | select(.artifactName == $ARTIFACT_NAME) | .id')
+        if [ -n "$exists" ]; then
+          echo "API_EXISTS=true" >> $GITHUB_ENV
+          echo "API_ID=$exists" >> $GITHUB_ENV
         else
-          echo "📦 No existing application found"
-          echo "APP_EXISTS=false" >> $GITHUB_ENV
+          echo "API_EXISTS=false" >> $GITHUB_ENV
         fi
 
-    - name: Stop Existing Application
-      if: env.APP_EXISTS == 'true' && env.CURRENT_STATUS == 'STARTED'
+    - name: Deploy or Redeploy MuleSoft API
       run: |
-        echo "⏸️ Stopping existing application before redeployment..."
-        
-        stop_response=$(curl -s --request POST "$ANYPOINT_BASE_URL/$APP_ID/status" \
-          --header "Authorization: Bearer $TOKEN" \
-          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-          --header "Content-Type: application/json" \
-          --data '{"status": "STOP"}')
-        
-        echo "Stop response: $stop_response"
-        
-        # Wait for application to stop
-        echo "⏳ Waiting for application to stop..."
-        for i in {1..12}; do
-          sleep 5
-          status_response=$(curl -s --request GET "$ANYPOINT_BASE_URL/$APP_ID" \
+        if [ "$API_EXISTS" == "true" ]; then
+          echo "Redeploying existing API..."
+          curl --request PUT "$ANYPOINT_BASE_URL/$API_ID" \
             --header "Authorization: Bearer $TOKEN" \
             --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-            --header "X-ANYPNT-ENV-ID: $ENV_ID")
-          
-          current_status=$(echo "$status_response" | jq -r '.status')
-          echo "Current status: $current_status"
-          
-          if [ "$current_status" = "STOPPED" ]; then
-            echo "✅ Application stopped successfully"
-            break
-          fi
-          
-          if [ $i -eq 12 ]; then
-            echo "⚠️ Timeout waiting for application to stop. Proceeding anyway..."
-          fi
-        done
-
-    - name: Update Existing Application
-      if: env.APP_EXISTS == 'true'
-      run: |
-        echo "🔄 Updating existing application: $ARTIFACT_NAME"
-        
-        # For hybrid deployments, we need to update the application artifact
-        update_response=$(curl -s --request PUT "$ANYPOINT_BASE_URL/$APP_ID" \
-          --header "Authorization: Bearer $TOKEN" \
-          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-          --form "file=@test2.jar" \
-          --form "artifactName=$ARTIFACT_NAME" \
-          --form "targetId=$TARGET_ID")
-        
-        echo "Update response: $update_response"
-        
-        # Check for errors
-        if echo "$update_response" | jq -e '.errors' > /dev/null 2>&1; then
-          echo "❌ Update failed:"
-          echo "$update_response" | jq -r '.errors[].message'
-          exit 1
-        elif echo "$update_response" | jq -e '.message' > /dev/null 2>&1 && echo "$update_response" | grep -q "error"; then
-          echo "❌ Update failed: $(echo "$update_response" | jq -r '.message')"
-          exit 1
-        fi
-        
-        echo "✅ Application updated successfully"
-
-    - name: Deploy New Application
-      if: env.APP_EXISTS == 'false'
-      run: |
-        echo "🚀 Deploying new application: $ARTIFACT_NAME"
-        
-        deploy_response=$(curl -s --request POST "$ANYPOINT_BASE_URL" \
-          --header "Authorization: Bearer $TOKEN" \
-          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-          --form "file=@test2.jar" \
-          --form "artifactName=$ARTIFACT_NAME" \
-          --form "targetId=$TARGET_ID")
-        
-        echo "Deploy response: $deploy_response"
-        
-        # Check for errors
-        if echo "$deploy_response" | jq -e '.errors' > /dev/null 2>&1; then
-          echo "❌ Deployment failed:"
-          echo "$deploy_response" | jq -r '.errors[].message'
-          exit 1
-        elif echo "$deploy_response" | jq -e '.message' > /dev/null 2>&1 && echo "$deploy_response" | grep -q "error"; then
-          echo "❌ Deployment failed: $(echo "$deploy_response" | jq -r '.message')"
-          exit 1
-        fi
-        
-        echo "✅ New application deployed successfully"
-        
-        # Get the new app ID for starting
-        echo "🔍 Getting new application ID..."
-        sleep 5
-        apps_response=$(curl -s --request GET "$ANYPOINT_BASE_URL" \
-          --header "Authorization: Bearer $TOKEN" \
-          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID")
-        
-        new_app_id=$(echo "$apps_response" | jq -r ".data[]? | select(.artifactName==\"$ARTIFACT_NAME\") | .id")
-        echo "APP_ID=$new_app_id" >> $GITHUB_ENV
-
-    - name: Start Application
-      run: |
-        echo "▶️ Starting application..."
-        
-        start_response=$(curl -s --request POST "$ANYPOINT_BASE_URL/$APP_ID/status" \
-          --header "Authorization: Bearer $TOKEN" \
-          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-          --header "Content-Type: application/json" \
-          --data '{"status": "START"}')
-        
-        echo "Start response: $start_response"
-
-    - name: Verify Deployment
-      run: |
-        echo "🔍 Verifying deployment status..."
-        
-        # Wait and check final status
-        for i in {1..24}; do
-          sleep 5
-          
-          status_response=$(curl -s --request GET "$ANYPOINT_BASE_URL" \
+            --header "X-ANYPNT-ENV-ID: $ENV_ID" \
+            --form "file=@test2.jar" \
+            --form "artifactName=$ARTIFACT_NAME" \
+            --form "targetId=$TARGET_ID"
+        else
+          echo "Deploying new API..."
+          curl --request POST "$ANYPOINT_BASE_URL" \
             --header "Authorization: Bearer $TOKEN" \
             --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-            --header "X-ANYPNT-ENV-ID: $ENV_ID")
-          
-          final_status=$(echo "$status_response" | jq -r ".data[]? | select(.artifactName==\"$ARTIFACT_NAME\") | .status")
-          echo "Current status: $final_status"
-          
-          if [ "$final_status" = "STARTED" ]; then
-            echo "✅ Application is running successfully!"
-            break
-          elif [ "$final_status" = "FAILED" ]; then
-            echo "❌ Application failed to start"
-            exit 1
-          fi
-          
-          if [ $i -eq 24 ]; then
-            echo "⚠️ Timeout waiting for application to start. Final status: $final_status"
-          fi
-        done
+            --header "X-ANYPNT-ENV-ID: $ENV_ID" \
+            --form "file=@test2.jar" \
+            --form "artifactName=$ARTIFACT_NAME" \
+            --form "targetId=$TARGET_ID"
+        fi
