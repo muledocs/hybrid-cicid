@@ -54,24 +54,23 @@ jobs:
           echo "API_EXISTS=false" >> $GITHUB_ENV
         fi
 
-    - name: Deploy or Redeploy MuleSoft API
+    - name: Delete Existing API (if exists)
+      if: env.API_EXISTS == 'true'
       run: |
-        if [ "$API_EXISTS" == "true" ]; then
-          echo "Redeploying existing API..."
-          curl --request PUT "$ANYPOINT_BASE_URL/$API_ID" \
-            --header "Authorization: Bearer $TOKEN" \
-            --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-            --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-            --form "file=@test2.jar" \
-            --form "artifactName=$ARTIFACT_NAME" \
-            --form "targetId=$TARGET_ID"
-        else
-          echo "Deploying new API..."
-          curl --request POST "$ANYPOINT_BASE_URL" \
-            --header "Authorization: Bearer $TOKEN" \
-            --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-            --header "X-ANYPNT-ENV-ID: $ENV_ID" \
-            --form "file=@test2.jar" \
-            --form "artifactName=$ARTIFACT_NAME" \
-            --form "targetId=$TARGET_ID"
-        fi
+        echo "Deleting existing API with ID: $API_ID..."
+        curl --request DELETE "$ANYPOINT_BASE_URL/$API_ID" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID"
+        echo "Existing API deleted successfully."
+
+    - name: Deploy MuleSoft API
+      run: |
+        echo "Deploying MuleSoft API..."
+        curl --request POST "$ANYPOINT_BASE_URL" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID" \
+          --form "file=@test2.jar" \
+          --form "artifactName=$ARTIFACT_NAME" \
+          --form "targetId=$TARGET_ID"
