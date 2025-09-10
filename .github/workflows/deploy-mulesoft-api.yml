@@ -36,6 +36,7 @@ jobs:
           --data-urlencode "client_secret=B51af0A705864943B92692AFbB1CC2db" \
           --data-urlencode "grant_type=client_credentials")
         echo "TOKEN=$(echo $response | jq -r '.access_token')" >> $GITHUB_ENV
+        echo "Access token generated successfully."
 
     - name: Check if API Exists
       id: check-api
@@ -50,27 +51,32 @@ jobs:
         if [ -n "$exists" ]; then
           echo "API_EXISTS=true" >> $GITHUB_ENV
           echo "API_ID=$exists" >> $GITHUB_ENV
+          echo "API already exists with ID: $exists"
         else
           echo "API_EXISTS=false" >> $GITHUB_ENV
+          echo "API does not exist. Proceeding with deployment."
         fi
 
     - name: Delete Existing API (if exists)
       if: env.API_EXISTS == 'true'
       run: |
         echo "Deleting existing API with ID: $API_ID..."
-        curl --request DELETE "$ANYPOINT_BASE_URL/$API_ID" \
+        delete_response=$(curl --request DELETE "$ANYPOINT_BASE_URL/$API_ID" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
-          --header "X-ANYPNT-ENV-ID: $ENV_ID"
+          --header "X-ANYPNT-ENV-ID: $ENV_ID")
+        echo "Delete response: $delete_response"
         echo "Existing API deleted successfully."
 
     - name: Deploy MuleSoft API
       run: |
         echo "Deploying MuleSoft API..."
-        curl --request POST "$ANYPOINT_BASE_URL" \
+        deploy_response=$(curl --request POST "$ANYPOINT_BASE_URL" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
           --form "file=@test2.jar" \
           --form "artifactName=$ARTIFACT_NAME" \
-          --form "targetId=$TARGET_ID"
+          --form "targetId=$TARGET_ID")
+        echo "Deploy response: $deploy_response"
+        echo "API deployed successfully."
