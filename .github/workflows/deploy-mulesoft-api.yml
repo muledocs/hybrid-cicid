@@ -46,7 +46,7 @@ jobs:
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID")
         echo "Response: $response"
-        exists=$(echo $response | jq -r --arg ARTIFACT_NAME "$ARTIFACT_NAME" '.[] | select(.artifactName == $ARTIFACT_NAME) | .id')
+        exists=$(echo $response | jq -r --arg ARTIFACT_NAME "$ARTIFACT_NAME" '.data[] | select(.artifact.name == $ARTIFACT_NAME) | .id')
         if [ -n "$exists" ]; then
           echo "API_EXISTS=true" >> $GITHUB_ENV
           echo "API_ID=$exists" >> $GITHUB_ENV
