@@ -75,6 +75,9 @@ jobs:
       run: |
         echo "Checking if API '$ARTIFACT_NAME' already exists..."
         
+        # Initialize REDEPLOY_SUCCESS to false by default
+        echo "REDEPLOY_SUCCESS=false" >> $GITHUB_ENV
+        
         response=$(curl -s --request GET "$ANYPOINT_BASE_URL" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
@@ -156,7 +159,10 @@ jobs:
       if: env.API_EXISTS == 'false' || env.REDEPLOY_SUCCESS == 'false'
       id: deploy-api
       run: |
-        if [ "$API_EXISTS" = "true" ] && [ "$REDEPLOY_SUCCESS" = "false" ]; then
+        echo "Debug: API_EXISTS=$API_EXISTS"
+        echo "Debug: REDEPLOY_SUCCESS=$REDEPLOY_SUCCESS"
+        
+        if [ "$API_EXISTS" = "true" ]; then
           echo "Deploying MuleSoft API (after deletion fallback)..."
         else
           echo "Deploying new MuleSoft API..."
