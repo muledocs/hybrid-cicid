@@ -101,35 +101,66 @@ jobs:
           exit 1
         fi
 
-    - name: Update Existing API
+    - name: Attempt Redeploy Existing API
       if: env.API_EXISTS == 'true'
-      id: update-api
+      id: redeploy-api
       run: |
-        echo "Updating existing API with ID: $API_ID..."
+        echo "Attempting to redeploy existing API with ID: $API_ID..."
         
-        update_response=$(curl -s --request PUT "$ANYPOINT_BASE_URL/$API_ID" \
+        # Try to redeploy using PATCH method (if supported)
+        redeploy_response=$(curl -s --request PATCH "$ANYPOINT_BASE_URL/$API_ID" \
           --header "Authorization: Bearer $TOKEN" \
           --header "X-ANYPNT-ORG-ID: $ORG_ID" \
           --header "X-ANYPNT-ENV-ID: $ENV_ID" \
           --form "file=@$JAR_FILE" \
           --form "artifactName=$ARTIFACT_NAME" \
-          --form "targetId=$TARGET_ID")
+          --form "targetId=$TARGET_ID" \
+          --write-out "HTTPSTATUS:%{http_code}")
         
-        # Check if update was successful
-        if echo "$update_response" | jq -e '.id' > /dev/null 2>&1; then
-          echo "API updated successfully"
-          echo "Update response: $update_response"
+        # Extract HTTP status code
+        http_code=$(echo "$redeploy_response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
+        response_body=$(echo "$redeploy_response" | sed 's/HTTPSTATUS:[0-9]*$//')
+        
+        if [ "$http_code" = "200" ] || [ "$http_code" = "202" ]; then
+          echo "API redeployed successfully using PATCH method"
+          echo "Redeploy response: $response_body"
+          echo "REDEPLOY_SUCCESS=true" >> $GITHUB_ENV
         else
-          echo "Error: Failed to update API"
-          echo "Update response: $update_response"
+          echo "PATCH method not supported (HTTP $http_code), will try alternative approach"
+          echo "Response: $response_body"
+          echo "REDEPLOY_SUCCESS=false" >> $GITHUB_ENV
+        fi
+
+    - name: Delete Existing API (Fallback)
+      if: env.API_EXISTS == 'true' && env.REDEPLOY_SUCCESS == 'false'
+      id: delete-api
+      run: |
+        echo "Deleting existing API with ID: $API_ID (fallback method)..."
+        
+        delete_response=$(curl -s --request DELETE "$ANYPOINT_BASE_URL/$API_ID" \
+          --header "Authorization: Bearer $TOKEN" \
+          --header "X-ANYPNT-ORG-ID: $ORG_ID" \
+          --header "X-ANYPNT-ENV-ID: $ENV_ID")
+        
+        # Check if deletion was successful
+        if [ $? -eq 0 ]; then
+          echo "Existing API deleted successfully"
+          echo "Delete response: $delete_response"
+        else
+          echo "Error: Failed to delete existing API"
+          echo "Delete response: $delete_response"
           exit 1
         fi
 
-    - name: Deploy New API
-      if: env.API_EXISTS == 'false'
+    - name: Deploy MuleSoft API
+      if: env.API_EXISTS == 'false' || env.REDEPLOY_SUCCESS == 'false'
       id: deploy-api
       run: |
-        echo "Deploying new MuleSoft API..."
+        if [ "$API_EXISTS" = "true" ] && [ "$REDEPLOY_SUCCESS" = "false" ]; then
+          echo "Deploying MuleSoft API (after deletion fallback)..."
+        else
+          echo "Deploying new MuleSoft API..."
+        fi
         
         deploy_response=$(curl -s --request POST "$ANYPOINT_BASE_URL" \
           --header "Authorization: Bearer $TOKEN" \
@@ -153,12 +184,15 @@ jobs:
       run: |
         echo "Verifying deployment status..."
         
-        # Get the API ID from the previous step
-        if [ "$API_EXISTS" = "true" ]; then
+        # Determine API ID based on deployment method
+        if [ "$API_EXISTS" = "true" ] && [ "$REDEPLOY_SUCCESS" = "true" ]; then
+          # API was redeployed without deletion, use original ID
           api_id="$API_ID"
+          echo "Verifying redeployed API (same ID: $api_id)"
         else
-          # Extract API ID from deploy response
+          # API was deployed fresh, extract new ID
           api_id=$(echo "$deploy_response" | jq -r '.id')
+          echo "Verifying newly deployed API (new ID: $api_id)"
         fi
         
         if [ -n "$api_id" ] && [ "$api_id" != "null" ]; then
@@ -190,6 +224,15 @@ jobs:
         echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Artifact Name**: $ARTIFACT_NAME" >> $GITHUB_STEP_SUMMARY
         echo "- **JAR File**: $JAR_FILE" >> $GITHUB_STEP_SUMMARY
-        echo "- **Action**: $([ "$API_EXISTS" = "true" ] && echo "Updated existing API" || echo "Deployed new API")" >> $GITHUB_STEP_SUMMARY
-        echo "- **API ID**: $([ "$API_EXISTS" = "true" ] && echo "$API_ID" || echo "New deployment")" >> $GITHUB_STEP_SUMMARY
+        if [ "$API_EXISTS" = "true" ] && [ "$REDEPLOY_SUCCESS" = "true" ]; then
+          echo "- **Action**: Redeployed API (updated in-place)" >> $GITHUB_STEP_SUMMARY
+          echo "- **API ID**: $API_ID (unchanged)" >> $GITHUB_STEP_SUMMARY
+        elif [ "$API_EXISTS" = "true" ] && [ "$REDEPLOY_SUCCESS" = "false" ]; then
+          echo "- **Action**: Redeployed API (deleted and redeployed)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous API ID**: $API_ID" >> $GITHUB_STEP_SUMMARY
+          echo "- **New API ID**: $(echo "$deploy_response" | jq -r '.id')" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Action**: Deployed new API" >> $GITHUB_STEP_SUMMARY
+          echo "- **API ID**: $(echo "$deploy_response" | jq -r '.id')" >> $GITHUB_STEP_SUMMARY
+        fi
         echo "- **Status**: ✅ Completed successfully" >> $GITHUB_STEP_SUMMARY
